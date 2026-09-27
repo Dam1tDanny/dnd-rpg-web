@@ -1,0 +1,21 @@
+{
+  "description": "D&D Location RPG \u2014 web alpha (Phase 2 port of the Python prototype)",
+  "devDependencies": {
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.3",
+    "jsdom": "^30.1.1",
+    "typescript": "^5.5.4",
+    "vite": "^7.0.4"
+  },
+  "name": "dnd-rpg-web",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite",
+    "preview": "vite preview",
+    "smoke": "tsc -p tsconfig.smoke.json && node node_modules/.cache/dnd-smoke/smoke.js",
+    "uitest": "tsc -p tsconfig.domtest.json && node node_modules/.cache/dnd-domtest/domtest.js"
+  },
+  "type": "module",
+  "version": "0.1.0"
+}

@@ -1,0 +1,316 @@
+/* Dark-fantasy, mobile-first styles for the D&D Location RPG web alpha. */
+
+:root {
+  --bg: #14101d;
+  --bg2: #1d1626;
+  --card: #221a30;
+  --card-border: #3a2f4d;
+  --gold: #d4af37;
+  --gold-dim: #9a7f2a;
+  --text: #e8e0d0;
+  --muted: #9a8fb0;
+  --red: #c0392b;
+  --green: #4a7c59;
+  --radius: 12px;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: radial-gradient(1200px 800px at 50% -10%, #2a1f3d 0%, var(--bg) 60%);
+  background-attachment: fixed;
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  min-height: 100dvh;
+}
+
+#app {
+  max-width: 540px;
+  margin: 0 auto;
+  min-height: 100dvh;
+  padding: 16px 16px calc(24px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+h1,
+h2,
+h3 {
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--gold);
+  margin: 0;
+}
+
+.title {
+  text-align: center;
+  font-size: 1.6rem;
+  letter-spacing: 0.5px;
+}
+
+.subtitle {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin-top: -8px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+
+/* ---------- character creation ---------- */
+
+.field-label {
+  display: block;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin: 4px 0 8px;
+}
+
+.name-input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1.1rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--card-border);
+  background: var(--bg2);
+  color: var(--text);
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@media (max-width: 380px) {
+  .picker-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pick-card {
+  text-align: left;
+  background: var(--bg2);
+  border: 2px solid var(--card-border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 10px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  min-height: 56px;
+}
+
+.pick-card .pick-name {
+  font-weight: 700;
+  color: var(--text);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.pick-card .pick-sub {
+  color: var(--gold);
+  font-size: 0.75rem;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.pick-card .pick-desc {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  display: block;
+}
+
+.pick-card.selected {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 1px var(--gold), 0 0 18px rgba(212, 175, 55, 0.25);
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+  display: block;
+  width: 100%;
+  min-height: 54px;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+  color: #1a1206;
+  background: linear-gradient(180deg, #e8c95a, var(--gold) 60%, var(--gold-dim));
+  box-shadow: 0 4px 14px rgba(212, 175, 55, 0.35);
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.btn.secondary {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--card-border);
+  box-shadow: none;
+  min-height: 48px;
+  font-size: 1rem;
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-row .btn {
+  flex: 1;
+}
+
+.walk-btn {
+  font-size: 1.3rem;
+  min-height: 64px;
+}
+
+/* ---------- bars ---------- */
+
+.bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.bar-label strong {
+  color: var(--text);
+}
+
+.hpbar {
+  height: 14px;
+  border-radius: 8px;
+  background: #0d0a14;
+  border: 1px solid var(--card-border);
+  overflow: hidden;
+}
+
+.hpbar > div {
+  height: 100%;
+  border-radius: 8px;
+  background: linear-gradient(90deg, #5da86f, var(--green));
+  transition: width 0.35s ease;
+}
+
+.hpbar.monster > div {
+  background: linear-gradient(90deg, #e06a5a, var(--red));
+}
+
+.hpbar.progress > div {
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+}
+
+/* ---------- hero / monster panels ---------- */
+
+.hero-bar .hero-name {
+  font-family: Georgia, serif;
+  font-size: 1.15rem;
+  color: var(--gold);
+}
+
+.hero-bar .hero-sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 2px 0 8px;
+}
+
+.stat-chips {
+  display: flex;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.stat-chips strong {
+  color: var(--text);
+}
+
+.monster-card {
+  border-color: #5d2a24;
+}
+
+.monster-card .monster-name {
+  font-family: Georgia, serif;
+  font-size: 1.2rem;
+  color: #e08a7d;
+}
+
+.monster-card .monster-sub {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: 2px 0 8px;
+}
+
+/* ---------- journal ---------- */
+
+.journal {
+  background: #0d0a14;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  height: 38dvh;
+  min-height: 220px;
+  overflow-y: auto;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.journal.combat-log {
+  height: 30dvh;
+  min-height: 180px;
+}
+
+.journal-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---------- combat flow ---------- */
+
+.combat-over {
+  text-align: center;
+  padding: 8px;
+}
+
+.defeat-title {
+  color: #e08a7d;
+  font-size: 1.4rem;
+}
+
+.hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  text-align: center;
+}

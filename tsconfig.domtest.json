@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "outDir": "./node_modules/.cache/dnd-domtest"
+  },
+  "extends": "./tsconfig.json",
+  "include": [
+    "src/game",
+    "src/ui",
+    "src/domtest.ts"
+  ]
+}
