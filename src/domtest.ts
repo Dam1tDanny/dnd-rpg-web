@@ -74,28 +74,78 @@ interface FightOpts {
   usePotion?: "test" | "save";
 }
 
+/**
+ * Tap-to-move through the real UI: if the Attack button is range-gated,
+ * tap the hero token, then the glowing square nearest the monster.
+ * No-ops when already in range (or when the button is merely mid-animation).
+ */
+async function stepIntoRange(): Promise<void> {
+  const atk = root.querySelector("#attack-btn") as HTMLButtonElement | null;
+  if (!atk || !atk.disabled) return;
+  const token = root.querySelector(".gcell.player-token") as HTMLElement | null;
+  if (!token) return;
+  token.click(); // arm move mode
+  await sleep(60);
+  const foe = root.querySelector(".gcell.monster-token") as HTMLElement | null;
+  if (!foe) return;
+  const mx = Number(foe.dataset["x"]);
+  const my = Number(foe.dataset["y"]);
+  let best: HTMLElement | null = null;
+  let bestD = 99;
+  root.querySelectorAll<HTMLElement>(".gcell.reachable").forEach((c) => {
+    const d = Math.max(Math.abs(Number(c.dataset["x"]) - mx), Math.abs(Number(c.dataset["y"]) - my));
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  });
+  if (!best) return; // no destinations: button was busy-disabled, not range-gated
+  (best as HTMLElement).click();
+  await sleep(60);
+}
+
 /** Fight the current combat until it ends (victory, defeat, or fled). */
 async function fightToEnd(opts: FightOpts = {}): Promise<void> {
   let rounds = 0;
   let usedBreath = false;
+  let quaffed = false; // "test" policy: quaff once, on the first real action
   const dbg = (typeof process !== "undefined" && (process as unknown as { env?: Record<string, string> }).env?.["DOMTEST_DBG"]) === "1";
   while (rounds < 60) {
     if (root.querySelector("#continue-btn") || root.querySelector("#retry-btn")) return;
-    const atk = root.querySelector("#attack-btn") as HTMLButtonElement | null;
+    // The grid: melee heroes must stand next to the monster. Step into
+    // range first (free action), then fight as normal.
+    await stepIntoRange();
+    let atk = root.querySelector("#attack-btn") as HTMLButtonElement | null;
     if (!atk) return; // combat screen already gone
-    const breath = root.querySelector("#breath-btn") as HTMLButtonElement | null;
-    const potionBtn = root.querySelector("#potion-btn") as HTMLButtonElement | null;
     const hp = root.querySelector("#pl-hp-text")?.textContent ?? "?";
     const foe = root.querySelector("#foe-hp-text")?.textContent ?? "?";
+    if (atk.disabled) {
+      // Still out of range (one stride can't cover the opening distance):
+      // hold ground like a sensible player and let the monster close in.
+      const wait = root.querySelector("#wait-btn") as HTMLButtonElement | null;
+      if (wait && !wait.disabled) {
+        if (dbg) console.log(`  [r${rounds}] hp=${hp} foe=${foe} -> WAIT`);
+        wait.click();
+        await sleep(800); // let the monster's delayed turn fire
+        rounds++;
+        continue;
+      }
+      await sleep(200); // briefly gated (mid-animation); try again
+      continue;
+    }
+    const breath = root.querySelector("#breath-btn") as HTMLButtonElement | null;
+    const potionBtn = root.querySelector("#potion-btn") as HTMLButtonElement | null;
     const hm = hp.match(/(\d+)\/(\d+)/);
     const hasPotion = potionBtn && !potionBtn.disabled && potionBtn.textContent?.includes("(1)");
-    // Potion policy: "test" quaffs on round 0 to verify the button;
+    // Potion policy: "test" quaffs on the first real action to verify the
+    // button (it may not be round 0 anymore — a melee hero might Wait first);
     // "save" only drinks at/below half HP to conserve while grinding.
     // Either way, a smart player chugs FIRST when hurt — before breathing
     // or attacking. (The old code breathed first and died at 2 HP.)
     const wantPotion = opts.usePotion && hasPotion && hm &&
-      (opts.usePotion === "test" ? rounds === 0 : +hm[1] <= +hm[2] / 2);
+      (opts.usePotion === "test" ? !quaffed : +hm[1] <= +hm[2] / 2);
     if (wantPotion) {
+      quaffed = true;
       if (dbg) console.log(`  [r${rounds}] hp=${hp} foe=${foe} -> POTION`);
       (potionBtn as HTMLButtonElement).click();
     } else if (opts.useBreath && breath && !breath.disabled && !usedBreath) {
@@ -149,6 +199,29 @@ await fightToEnd({ usePotion: "test", useBreath: true }); // breath shortens the
 check("potion was drunk in combat", text().includes("Quaffed"));
 if (!root.querySelector("#retry-btn")) click("#continue-btn");
 
+// ---- battle grid: tap your token, tap a glowing square, token moves ----
+check("reached combat for grid test", await walkToCombat());
+check("battle grid renders", !!root.querySelector(".battle-grid"));
+const pTok = root.querySelector(".gcell.player-token") as HTMLElement | null;
+const mTok = root.querySelector(".gcell.monster-token") as HTMLElement | null;
+check("hero and monster tokens on the board", !!pTok && !!mTok);
+const px0 = pTok?.dataset["x"];
+const py0 = pTok?.dataset["y"];
+pTok?.click(); // arm move mode
+await sleep(60);
+check("tapping your token highlights destinations", root.querySelectorAll(".gcell.reachable").length > 0);
+const dest = root.querySelector(".gcell.reachable") as HTMLElement | null;
+if (dest) dest.click();
+await sleep(60);
+const pTok2 = root.querySelector(".gcell.player-token") as HTMLElement | null;
+check(
+  "tapping a glowing square moves your token",
+  !!pTok2 && (pTok2.dataset["x"] !== px0 || pTok2.dataset["y"] !== py0)
+);
+check("move logged in journal", text().includes("slip to a new position"));
+await fleeToEnd(); // leave this fight; the flee test below starts its own
+check("left the grid-test fight", click("#continue-btn"));
+
 // ---- flee a fight ----
 check("reached combat for flee test", await walkToCombat());
 await fleeToEnd();
@@ -157,8 +230,9 @@ check("flee continue button shown", click("#continue-btn"));
 check("back at adventure after flee", !!root.querySelector("#walk-btn"));
 
 // ---- grind to level 2 and check the new ability button ----
-// Play smart: stock a potion if affordable, then top up HP before grinding.
-if (goldNow() >= 10) click("#buy-potion-btn");
+// Play smart: stock up on potions while affordable, then top up HP.
+let bought = 0;
+while (goldNow() >= 10 && bought < 3) { click("#buy-potion-btn"); bought++; }
 // Best-effort top-up: if there's a potion and HP missing, drink. This is a
 // soft check — the game doesn't guarantee the hero can afford a potion.
 (() => {

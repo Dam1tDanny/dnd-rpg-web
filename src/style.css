@@ -314,3 +314,76 @@ h3 {
   font-size: 0.85rem;
   text-align: center;
 }
+
+/* ---------- battle grid ---------- */
+
+.battle-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+  margin: 4px 0;
+}
+
+.gcell {
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: default;
+  min-width: 0;
+}
+
+.gcell.light {
+  background: #2a2138;
+}
+
+.gcell.dark {
+  background: #201828;
+}
+
+.gcell .token {
+  font-size: 1.15rem;
+  line-height: 1.1;
+}
+
+.gcell .token-hp {
+  font-size: 0.58rem;
+  line-height: 1;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+.gcell.player-token {
+  border-color: var(--gold);
+  box-shadow: 0 0 6px rgba(212, 175, 55, 0.45);
+  cursor: pointer;
+}
+
+.gcell.player-token.moving {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+}
+
+.gcell.monster-token {
+  border-color: var(--red);
+  box-shadow: 0 0 6px rgba(192, 57, 43, 0.45);
+}
+
+.gcell.reachable {
+  cursor: pointer;
+  border-color: var(--green);
+  border-style: dashed;
+}
+
+.gcell .move-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--green);
+  opacity: 0.8;
+}

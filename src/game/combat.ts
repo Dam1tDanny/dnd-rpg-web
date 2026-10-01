@@ -9,6 +9,29 @@
 import { randint, rollDice } from "./rng.js";
 import type { Character } from "./character.js";
 import { xpForMonster, type Monster } from "./registries.js";
+import { BattleGrid, type Pos } from "./grid.js";
+
+/**
+ * Weapons that strike from anywhere on the grid. Everything else is a melee
+ * weapon: the hero must stand next to the monster to use it.
+ */
+const RANGED_WEAPONS = new Set([
+  "Longbow", // Ranger
+  "Fire Bolt Cantrip", // Wizard
+  "Eldritch Blast", // Warlock
+  "Chromatic Orb", // Sorcerer
+]);
+
+/**
+ * Abilities that work at any range regardless of the class's weapon.
+ * (Magic Missile and Vicious Mockery are ranged spells; Cure Wounds
+ * targets the caster themself.) Everything else follows weapon range.
+ */
+export const RANGED_ABILITIES = new Set([
+  "magic_missile",
+  "vicious_mockery",
+  "cure_wounds",
+]);
 
 export class Combat {
   player: Character;
@@ -23,6 +46,12 @@ export class Combat {
   playerWon = false;
   /** True when the player fled successfully: no loot, no XP, back to trail. */
   fled = false;
+
+  /** The tactical board: your token vs the monster's token. */
+  grid = new BattleGrid();
+  /** One reposition per round — you can't bank movement. Reset whenever
+   *  the player spends their attack/ability for the round. */
+  private movedThisRound = false;
 
   // ---- per-fight ability state (level-2 actives + their side effects) ----
   /** One-shot bonus to the next attack roll (Reckless Attack, Steady Aim). */
@@ -71,6 +100,67 @@ export class Combat {
     return lines;
   }
 
+  // ---------------------------------------------------------- grid movement
+
+  /** True when the hero's weapon strikes from anywhere on the board. */
+  playerRanged(): boolean {
+    return RANGED_WEAPONS.has(this.player.weapon);
+  }
+
+  /** True when the hero can currently land their weapon attack. */
+  playerInRange(): boolean {
+    return this.playerRanged() || this.grid.adjacent();
+  }
+
+  /** True when the named ability can currently be fired. */
+  abilityInRange(id: string): boolean {
+    return RANGED_ABILITIES.has(id) || this.playerInRange();
+  }
+
+  /**
+   * Reposition the hero's token (up to PLAYER_MOVE squares). One move per
+   * round; attacking (or firing an ability/breath) refreshes it. The UI
+   * calls this from grid taps; it never spends the attack itself.
+   */
+  movePlayer(x: number, y: number): string[] {
+    if (this.over) return [];
+    if (this.movedThisRound) {
+      return ["👟 You've already repositioned this round — attack!"];
+    }
+    if (!this.grid.movePlayerTo(x, y)) {
+      return ["👟 You can't get there from here."];
+    }
+    this.movedThisRound = true;
+    return [`👟 You slip to a new position. (${this.describeRange()})`];
+  }
+
+  /**
+   * Legal tap destinations for the hero token right now. Empty once the
+   * hero has repositioned this round — the UI offers no phantom moves.
+   */
+  moveDestinations(): Pos[] {
+    if (this.movedThisRound || this.over) return [];
+    return this.grid.playerReachable();
+  }
+
+  /**
+   * Move the hero's token toward the monster (used by the sims to play the
+   * grid like a sensible player would; the real UI moves via taps).
+   */
+  strideTowardMonster(): boolean {
+    if (this.movedThisRound || this.over) return false;
+    const moved = this.grid.strideTowardMonster();
+    if (moved) this.movedThisRound = true;
+    return moved;
+  }
+
+  private describeRange(): string {
+    if (this.playerRanged()) return "ranged attacker";
+    return this.grid.adjacent() ? "in melee range" : `${this.grid.distance()} away`;
+  }
+
+  // ------------------------------------------------------------------ turns
+
   /**
    * One full player round: Fighter Second Wind check, then the weapon attack.
    * If the monster won initiative, the UI should run monsterAttack() once
@@ -78,6 +168,13 @@ export class Combat {
    */
   playerAttack(): string[] {
     const lines: string[] = [];
+    // Range gate: a melee hero must stand next to the monster to swing.
+    // (The UI disables the Attack button out of range; this keeps every
+    // direct caller honest too.) A fizzle costs nothing and doesn't advance
+    // the round — the monster still gets its turn via the normal flow.
+    if (!this.playerInRange()) {
+      return ["📍 Too far away! Move next to the enemy first."];
+    }
     this.round += 1;
     lines.push(`--- Round ${this.round} ---`);
 
@@ -111,6 +208,12 @@ export class Combat {
     if (this.player.speciesName !== "Dragonborn" || this.player.breathWeaponUsed) {
       return lines;
     }
+    // Breath is a short cone: you must be standing next to the enemy.
+    // (The UI disables the button out of range; this is the safety net —
+    // it never consumes the breath.)
+    if (!this.grid.adjacent()) {
+      return ["📍 Too far away! Get next to the enemy to unleash your breath."];
+    }
     this.round += 1;
     lines.push(`--- Round ${this.round} ---`);
     this.player.breathWeaponUsed = true;
@@ -128,6 +231,11 @@ export class Combat {
   monsterAttack(): string[] {
     const lines: string[] = [];
 
+    // A full round-trip just completed: the hero's movement refreshes for
+    // their next turn. (Resetting here — rather than on attack — means a
+    // hero who repositioned but couldn't attack is never movement-locked.)
+    this.movedThisRound = false;
+
     // Monk Stunning Strike: a stunned monster loses its attack entirely.
     if (this.monsterStunned) {
       this.monsterStunned = false;
@@ -137,6 +245,19 @@ export class Combat {
     }
 
     lines.push(`🐾 The ${this.monster.name} attacks!`);
+
+    // The monster rushes you first (up to 4 squares), then strikes only if
+    // it reached melee range. A fast hero can kite for a turn or two — but
+    // the board is small and the monster is faster, so it always catches up.
+    if (this.grid.moveMonster()) {
+      lines.push(`  👟 The ${this.monster.name} rushes across the battlefield!`);
+    }
+    if (!this.grid.adjacent()) {
+      lines.push(`  💨 The ${this.monster.name} can't reach you this turn!`);
+      lines.push(`Your HP: ${Math.max(0, this.player.hp)}/${this.player.maxHp}`);
+      return lines;
+    }
+
     const rawRoll = randint(1, 20);
     let totalAttack = rawRoll + this.monster.attack_bonus;
     const mods: string[] = [];
@@ -226,6 +347,12 @@ export class Combat {
     if (player.abilitiesUsed.has(id)) return lines;
     const unlocked = player.availableAbilities().some((a) => a.id === id);
     if (!unlocked) return lines;
+    // Range check BEFORE spending: most abilities follow the class's weapon
+    // range (melee classes must be adjacent). Ranged spells and self-heals
+    // always work. Failing here refunds the ability — nothing is consumed.
+    if (!this.abilityInRange(id)) {
+      return ["📍 Too far away! Move next to the enemy first."];
+    }
     player.abilitiesUsed.add(id);
 
     this.round += 1;

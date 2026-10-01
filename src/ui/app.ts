@@ -8,6 +8,7 @@ import { Combat } from "../game/combat.js";
 import { CLASS_REGISTRY, POTION, SPECIES_REGISTRY, xpForLevel, type Monster } from "../game/registries.js";
 import { randint } from "../game/rng.js";
 import { Journal } from "./journal.js";
+import { GridMap } from "./gridmap.js";
 
 /** Escape user text before injecting it into innerHTML templates. */
 function esc(s: string): string {
@@ -32,6 +33,8 @@ export class App {
   private combatBusy = false;
   /** Monster's HP at the start of the current fight (for bar scaling). */
   private monsterStartHp = 1;
+  /** The tappable battle board for the current fight (null outside combat). */
+  private gridMap: GridMap | null = null;
 
   // Character-creation picks (defaults mirror the Python version's option 1).
   private pickedSpecies = "Human";
@@ -257,6 +260,7 @@ export class App {
     const player = this.player;
     this.combat = new Combat(player, monster);
     this.combatBusy = false;
+    this.gridMap = null;
     this.monsterStartHp = Math.max(1, monster.hp);
 
     const canBreath = player.speciesName === "Dragonborn";
@@ -276,6 +280,12 @@ export class App {
       </div>
 
       <div class="card">
+        <div class="bar-label"><span>🗺️ Battle Map</span></div>
+        <div id="grid-slot"></div>
+        <p class="hint" id="range-hint" style="text-align:left;margin:6px 0 0"></p>
+      </div>
+
+      <div class="card">
         <div class="bar-label"><span>❤️ ${esc(player.name)}</span><strong id="pl-hp-text">${player.hp}/${player.maxHp}</strong></div>
         <div class="hpbar"><div id="pl-hp-fill" style="width:${hpWidth(player.hp, player.maxHp)}"></div></div>
       </div>
@@ -285,17 +295,32 @@ export class App {
       <div id="combat-controls">
         <div class="btn-row">
           <button class="btn" id="attack-btn">⚔️ Attack</button>
+          <button class="btn secondary" id="wait-btn">⏳ Wait</button>
           <button class="btn secondary" id="potion-btn">🧪 Potion (${player.potions})</button>
           <button class="btn secondary" id="flee-btn">🏃 Flee</button>
         </div>
         ${canBreath ? `<div class="btn-row"><button class="btn secondary" id="breath-btn">🐉 Breath</button></div>` : ""}
         ${abilityButtons ? `<div class="btn-row" id="ability-row">${abilityButtons}</div>` : ""}
-        <p class="hint">${canBreath ? "Breath Weapon: 2d6 elemental burst, once per fight. " : ""}Potions are swift — drink and still attack. Fleeing and abilities take your turn.</p>
+        <p class="hint">${canBreath ? "Breath Weapon: 2d6 elemental burst, once per fight. " : ""}Potions are swift — drink and still attack. Waiting holds your ground and lets the enemy come to you. Fleeing and abilities take your turn.</p>
       </div>
     `;
 
     this.journal.element.classList.add("combat-log");
     this.root.querySelector("#journal-slot")!.appendChild(this.journal.element);
+
+    // The battle board: tap your token, then a glowing square, to reposition
+    // (up to 3 squares, once per round). Moving never costs your attack.
+    const combat = this.combat;
+    this.gridMap = new GridMap(this.root.querySelector("#grid-slot")!, combat.grid, {
+      playerClass: player.className,
+      monsterName: monster.name,
+      playerHpText: () => `${player.hp}/${player.maxHp}`,
+      monsterHpText: () => `${Math.max(0, combat.monster.hp)}`,
+      onMove: (x, y) => this.onGridMove(x, y),
+      canMove: () => !this.combatBusy && !!this.combat && !this.combat.over,
+      reachable: () => (this.combat ? this.combat.moveDestinations() : []),
+    });
+
     this.journal.addMany(this.combat.start());
 
     // Monster opening turn when it wins initiative.
@@ -307,8 +332,12 @@ export class App {
       }
     }
     this.updateCombatBars();
+    // Sync every button: potion-empty, breath-spent, ability-spent, and the
+    // new range gating (a melee hero opens out of range with Attack off).
+    this.setCombatButtons(true);
 
     this.root.querySelector("#attack-btn")!.addEventListener("click", () => this.onAttack());
+    this.root.querySelector("#wait-btn")!.addEventListener("click", () => this.onWait());
     this.root.querySelector("#potion-btn")!.addEventListener("click", () => this.onPotion());
     this.root.querySelector("#flee-btn")!.addEventListener("click", () => this.onFlee());
     const breathBtn = this.root.querySelector("#breath-btn");
@@ -319,7 +348,7 @@ export class App {
   }
 
   private setCombatButtons(enabled: boolean): void {
-    const ids = ["#attack-btn", "#potion-btn", "#flee-btn", "#breath-btn"];
+    const ids = ["#attack-btn", "#wait-btn", "#potion-btn", "#flee-btn", "#breath-btn"];
     for (const id of ids) {
       const btn = this.root.querySelector<HTMLButtonElement>(id);
       if (btn) btn.disabled = !enabled;
@@ -340,6 +369,17 @@ export class App {
         !this.combat || this.combat.player.abilitiesUsed.has(btn.dataset["ability"]!);
       btn.disabled = !enabled || spent;
     });
+    // Range gating: melee weapons, breath, and most abilities need the hero
+    // standing next to the monster. Ranged classes strike from anywhere.
+    if (this.combat) {
+      const atk = this.root.querySelector<HTMLButtonElement>("#attack-btn");
+      if (atk && !this.combat.playerInRange()) atk.disabled = true;
+      const breathBtn = this.root.querySelector<HTMLButtonElement>("#breath-btn");
+      if (breathBtn && !this.combat.grid.adjacent()) breathBtn.disabled = true;
+      this.root.querySelectorAll<HTMLButtonElement>(".ability-btn").forEach((btn) => {
+        if (!this.combat!.abilityInRange(btn.dataset["ability"]!)) btn.disabled = true;
+      });
+    }
   }
 
   private onAttack(): void {
@@ -355,6 +395,22 @@ export class App {
       return;
     }
     // The monster answers a beat later, so taps feel turn-based.
+    window.setTimeout(() => this.afterPlayerTurn(), 700);
+  }
+
+  /**
+   * Hold your ground: skip the attack and let the monster come to you.
+   * This is how a melee hero handles a distant enemy — charging in eats a
+   * free hit, waiting lets it close on your terms. The monster answers
+   * after the usual beat, exactly like after an attack.
+   */
+  private onWait(): void {
+    if (this.combatBusy || !this.combat || this.combat.over) return;
+    this.combatBusy = true;
+    this.setCombatButtons(false);
+
+    this.journal.add("⏳ You hold your ground, weapon ready...");
+    this.updateCombatBars();
     window.setTimeout(() => this.afterPlayerTurn(), 700);
   }
 
@@ -384,6 +440,19 @@ export class App {
     this.updateCombatBars();
     this.refreshPotionButton();
     this.setCombatButtons(true);
+  }
+
+  /** A grid tap: reposition the hero token. Free action — no monster answer. */
+  private onGridMove(x: number, y: number): boolean {
+    if (this.combatBusy || !this.combat || this.combat.over) return false;
+    const before = { ...this.combat.grid.player };
+    this.journal.addMany(this.combat.movePlayer(x, y));
+    const moved =
+      this.combat.grid.player.x !== before.x || this.combat.grid.player.y !== before.y;
+    this.updateCombatBars();
+    // A move can bring the monster into range — re-sync the buttons.
+    this.setCombatButtons(true);
+    return moved;
   }
 
   /** Flee: success ends the fight with no loot/XP; failure already hurt. */
@@ -454,6 +523,20 @@ export class App {
     if (monHpFill) monHpFill.style.width = hpWidth(mon.hp, this.monsterStartHp);
     if (plHpText) plHpText.textContent = `${this.player.hp}/${this.player.maxHp}`;
     if (plHpFill) plHpFill.style.width = hpWidth(this.player.hp, this.player.maxHp);
+
+    // The board re-renders after every action so the tokens (and their HP
+    // labels) track the fight, including the monster's chase movement.
+    this.gridMap?.render();
+    const hint = this.root.querySelector("#range-hint");
+    if (hint && this.combat) {
+      if (!this.combat.playerInRange()) {
+        hint.textContent = "📍 Too far to strike — tap your token, then a glowing square, or ⏳ Wait and let it come to you.";
+      } else if (this.combat.playerRanged()) {
+        hint.textContent = "🏹 Ranged attacker — you strike from anywhere on the map.";
+      } else {
+        hint.textContent = "⚔️ In melee range — tap your token to reposition, or attack!";
+      }
+    }
   }
 
   private finishCombat(): void {

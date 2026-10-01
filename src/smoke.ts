@@ -11,6 +11,7 @@ import { Character } from "./game/character.js";
 import { Combat } from "./game/combat.js";
 import { AdventureEngine } from "./game/engine.js";
 import { ENCOUNTER_TABLES, getBiomeMonster, type Monster } from "./game/registries.js";
+import { BattleGrid, chebyshev, PLAYER_MOVE } from "./game/grid.js";
 
 function makeMonster(name: string): Monster {
   const def = ENCOUNTER_TABLES["Forest"].find((m) => m.name === name);
@@ -33,14 +34,31 @@ function winRate(species: string, cls: string, monsterName: string, n: number): 
     if (!combat.playerFirst) combat.monsterAttack();
     let guard = 0;
     while (!combat.over && guard++ < 200) {
-      // Dragonborn uses the breath weapon button on round one.
-      if (species === "Dragonborn" && combat.round === 0) combat.breathWeapon();
-      else combat.playerAttack();
+      // Dragonborn fires the breath weapon on round one — but breath is a
+      // short cone, so a melee hero strides into range first.
+      if (species === "Dragonborn" && combat.round === 0) {
+        if (!combat.grid.adjacent()) combat.strideTowardMonster();
+        combat.breathWeapon();
+      } else {
+        closeAndStrike(combat);
+      }
       if (!combat.over) combat.monsterAttack();
     }
     if (combat.over && combat.playerWon) wins++;
   }
   return wins / n;
+}
+
+/**
+ * Play the grid the way a sensible player would: melee heroes stride into
+ * range before swinging; ranged heroes (bow/spell weapons) shoot from
+ * wherever they stand.
+ */
+function closeAndStrike(combat: Combat): void {
+  if (!combat.playerRanged() && !combat.grid.adjacent()) {
+    combat.strideTowardMonster();
+  }
+  combat.playerAttack();
 }
 
 function check(label: string, cond: boolean): void {
@@ -80,11 +98,13 @@ function winRateWithPotions(species: string, cls: string, monsterName: string, n
     if (!combat.playerFirst) combat.monsterAttack();
     let guard = 0;
     while (!combat.over && guard++ < 200) {
-      if (species === "Dragonborn" && combat.round === 0) combat.breathWeapon();
-      else {
+      if (species === "Dragonborn" && combat.round === 0) {
+        if (!combat.grid.adjacent()) combat.strideTowardMonster();
+        combat.breathWeapon();
+      } else {
         // Swift quaff first, then the normal attack.
         if (player.potions > 0 && player.hp <= player.maxHp / 2) combat.drinkPotion();
-        combat.playerAttack();
+        closeAndStrike(combat);
       }
       if (!combat.over) combat.monsterAttack();
     }
@@ -125,6 +145,125 @@ const fleeRate = fled / FLEE_N;
 console.log(`Human Rogue flee vs Goblin Scout: ${(fleeRate * 100).toFixed(1)}% fled (expected ~45%), ${fleeDeaths} died on failed attempts`);
 check("Flee rate near the 45% formula (35-55%)", fleeRate > 0.35 && fleeRate < 0.55);
 
+console.log("--- battle grid ---");
+{
+  const g = new BattleGrid();
+  check("fight opens at distance 6", g.distance() === 6);
+  check("tokens not adjacent at start", !g.adjacent());
+  check("chebyshev counts diagonals as 1", chebyshev({ x: 0, y: 0 }, { x: 1, y: 1 }) === 1);
+  const reach = g.playerReachable();
+  check("hero has legal destinations", reach.length > 0);
+  check(
+    `all destinations within ${PLAYER_MOVE} squares`,
+    reach.every((c) => chebyshev(g.player, c) <= PLAYER_MOVE)
+  );
+  check(
+    "can't move onto the monster's square",
+    !reach.some((c) => c.x === g.monster.x && c.y === g.monster.y)
+  );
+  check("illegal move rejected", !g.movePlayerTo(g.monster.x, g.monster.y));
+  check("cross-board teleport rejected", !g.movePlayerTo(0, 0));
+  const dest = reach[0];
+  check("legal move accepted", g.movePlayerTo(dest.x, dest.y));
+  check("token actually moved", g.player.x === dest.x && g.player.y === dest.y);
+}
+{
+  // The monster moves 4, the hero 3: a runner buys time but gets caught —
+  // the board is small and the monster cuts corners.
+  const g = new BattleGrid();
+  let turns = 0;
+  while (!g.adjacent() && turns < 30) {
+    const dests = g.playerReachable();
+    dests.sort((a, b) => chebyshev(b, g.monster) - chebyshev(a, g.monster));
+    const best = dests[0];
+    g.movePlayerTo(best.x, best.y);
+    g.moveMonster();
+    turns++;
+  }
+  check("monster eventually catches a fleeing hero", g.adjacent());
+  console.log(`  caught the runner after ${turns} turns`);
+}
+{
+  // Kiting is real: sprinting away denies the monster its opening attack.
+  const g = new BattleGrid();
+  const dests = g.playerReachable();
+  dests.sort((a, b) => chebyshev(b, g.monster) - chebyshev(a, g.monster));
+  g.movePlayerTo(dests[0].x, dests[0].y);
+  const closed = g.moveMonster();
+  check("kiting hero denies the turn-1 attack", closed && !g.adjacent());
+}
+console.log("--- grid x combat integration ---");
+{
+  setSeed(11);
+  const p = new Character("T", "Human", "Fighter"); // Greatsword: melee
+  const c = new Combat(p, makeMonster("Goblin Scout"));
+  c.start();
+  check("Fighter is melee", !c.playerRanged());
+  check("melee hero opens out of range", !c.playerInRange());
+  const d0 = c.grid.distance();
+  check("stride closes distance", c.strideTowardMonster() && c.grid.distance() < d0);
+  check("one move per round", !c.strideTowardMonster());
+  c.monsterAttack(); // monster rushes in; the hero's movement refreshes
+  check("monster reached melee", c.grid.adjacent());
+  check("hero in range after the exchange", c.playerInRange());
+}
+{
+  // Breath weapon is a short cone: fizzling at range never consumes it.
+  setSeed(12);
+  const d = new Character("T", "Dragonborn", "Fighter");
+  const c = new Combat(d, makeMonster("Goblin Scout"));
+  c.start();
+  const lines = c.breathWeapon();
+  check("breath fizzles out of range", lines.join(" ").includes("Too far") && !d.breathWeaponUsed);
+  check("breath still available after fizzle", !d.breathWeaponUsed);
+}
+{
+  // Melee abilities are range-gated and refunded, not spent.
+  setSeed(13);
+  const f = new Character("T", "Human", "Fighter");
+  f.gainXp(100); // level 2 -> Action Surge
+  const c = new Combat(f, makeMonster("Goblin Scout"));
+  c.start();
+  const lines = c.useAbility("action_surge");
+  check(
+    "melee ability refunded out of range",
+    lines.join(" ").includes("Too far") && !f.abilitiesUsed.has("action_surge")
+  );
+  // Ranged classes and ranged spells ignore distance.
+  const w = new Character("T", "Human", "Wizard"); // Fire Bolt Cantrip
+  const c2 = new Combat(w, makeMonster("Goblin Scout"));
+  c2.start();
+  check("Wizard strikes from anywhere", c2.playerRanged() && c2.playerInRange());
+  const b = new Character("T", "Human", "Bard"); // Rapier, but Vicious Mockery is a ranged spell
+  b.gainXp(100);
+  const c3 = new Combat(b, makeMonster("Goblin Scout"));
+  c3.start();
+  check("Vicious Mockery works at range", c3.abilityInRange("vicious_mockery"));
+  check("Bard's rapier still needs adjacency", !c3.playerInRange());
+}
+{
+  // Regression: the opening-round soft-lock. A melee hero who moves first
+  // strides to distance 3 and can't attack — the fight must still advance
+  // (the monster closes on its turn) instead of freezing with no legal move.
+  setSeed(21);
+  const p = new Character("T", "Human", "Fighter");
+  const c = new Combat(p, makeMonster("Goblin Scout"));
+  c.start();
+  c.strideTowardMonster();
+  const fizzle = c.playerAttack();
+  check("out-of-range attack fizzles without advancing the round", fizzle.join(" ").includes("Too far") && c.round === 0);
+  c.monsterAttack();
+  check("monster closed the distance on its turn", c.grid.adjacent());
+  check("hero can attack now", c.playerInRange());
+  // And movement refreshes every round — no movement lock.
+  const p2 = new Character("T", "Human", "Fighter");
+  const c2 = new Combat(p2, makeMonster("Goblin Scout"));
+  c2.start();
+  c2.strideTowardMonster();
+  c2.monsterAttack();
+  check("movement refreshes after the monster's turn", c2.moveDestinations().length > 0);
+}
+
 console.log("--- XP and levels ---");
 // Grind goblins the way a player would: fight, victory (loot + XP), repeat.
 // This section tests PROGRESSION math, not survival — so the grinder rests
@@ -144,7 +283,7 @@ for (let i = 0; i < 12; i++) {
   if (!combat.playerFirst) combat.monsterAttack();
   let guard = 0;
   while (!combat.over && guard++ < 200) {
-    combat.playerAttack();
+    closeAndStrike(combat);
     if (!combat.over) combat.monsterAttack();
   }
   if (combat.playerWon) {
@@ -177,6 +316,7 @@ spender.gainXp(100);
 const c2 = new Combat(spender, makeMonster("Goblin Scout"));
 c2.start();
 check("ability available at fight start", spender.availableAbilities().length === 1);
+c2.grid.player = { x: 3, y: 1 }; // sparring distance: right next to the monster
 c2.useAbility("action_surge");
 check("ability spent after use", spender.availableAbilities().length === 0);
 const c3 = new Combat(spender, makeMonster("Goblin Scout"));
@@ -220,7 +360,7 @@ try {
       if (!combat.playerFirst) combat.monsterAttack();
       let guard = 0;
       while (!combat.over && guard++ < 200) {
-        combat.playerAttack();
+        closeAndStrike(combat);
         if (!combat.over) combat.monsterAttack();
       }
       if (combat.playerWon) combat.victoryLines();
