@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
-DIST = ROOT / "dist-singlefile"
+DIST = ROOT / "dist"  # standard `npm run build` output
 OUT = ROOT / "dnd-rpg-web-alpha.html"
 
 

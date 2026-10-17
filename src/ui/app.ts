@@ -88,12 +88,12 @@ export class App {
 
       <div>
         <span class="field-label">Species</span>
-        <div class="picker-grid" id="species-grid">${speciesCards}</div>
+        <div class="picker-scroll"><div class="picker-grid" id="species-grid">${speciesCards}</div></div>
       </div>
 
       <div>
         <span class="field-label">Class</span>
-        <div class="picker-grid" id="class-grid">${classCards}</div>
+        <div class="picker-scroll"><div class="picker-grid" id="class-grid">${classCards}</div></div>
       </div>
 
       <div class="card" id="preview-card"></div>

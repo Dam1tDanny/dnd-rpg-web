@@ -98,6 +98,17 @@ h3 {
   gap: 8px;
 }
 
+/* Scrollable picker boxes: on phones the 9 species / 12 classes would make
+   one endless page. Each picker gets its own compact scroll area instead. */
+.picker-scroll {
+  max-height: 44dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding: 2px 6px 2px 2px;
+}
+
 @media (max-width: 380px) {
   .picker-grid {
     grid-template-columns: 1fr;
