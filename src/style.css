@@ -104,9 +104,49 @@ h3 {
   max-height: 44dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
   scrollbar-width: thin;
   padding: 2px 6px 2px 2px;
+}
+
+/* Creation screen fills exactly one viewport: the pickers flex and scroll
+   internally, so the Begin button is always reachable without page
+   scrolling. (The game is served in an iframe on itch.io, and iframe pages
+   don't scroll reliably with touch on mobile.) */
+#app.creation-mode {
+  height: 100dvh;
+  gap: 8px;
+}
+#app.creation-mode .title {
+  font-size: 1.25rem;
+}
+#app.creation-mode .name-input {
+  padding: 8px 12px;
+  font-size: 1rem;
+}
+/* The ability blurb is already on each class card; hide the duplicate. */
+#app.creation-mode #preview-card .hint {
+  display: none;
+}
+#app.creation-mode .picker-wrap {
+  flex: 1 1 0;
+  min-height: 88px;
+  display: flex;
+  flex-direction: column;
+}
+#app.creation-mode .picker-wrap .picker-scroll {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+}
+
+/* Short landscape screens: squeeze harder. */
+@media (max-height: 520px) {
+  #app.creation-mode .subtitle {
+    display: none;
+  }
+  #app.creation-mode .field-label {
+    margin: 2px 0 4px;
+  }
 }
 
 @media (max-width: 380px) {

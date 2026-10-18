@@ -54,6 +54,7 @@ export class App {
   private showCreation(): void {
     this.combat = null;
     this.engine = null;
+    this.root.classList.add("creation-mode");
 
     const speciesCards = Object.entries(SPECIES_REGISTRY)
       .map(
@@ -86,12 +87,12 @@ export class App {
         <input id="hero-name" class="name-input" maxlength="24" value="${esc(this.heroName)}" />
       </div>
 
-      <div>
+      <div class="picker-wrap">
         <span class="field-label">Species</span>
         <div class="picker-scroll"><div class="picker-grid" id="species-grid">${speciesCards}</div></div>
       </div>
 
-      <div>
+      <div class="picker-wrap">
         <span class="field-label">Class</span>
         <div class="picker-scroll"><div class="picker-grid" id="class-grid">${classCards}</div></div>
       </div>
@@ -160,6 +161,7 @@ export class App {
 
   private showAdventure(): void {
     if (!this.player || !this.engine) return;
+    this.root.classList.remove("creation-mode");
     const player = this.player;
     const engine = this.engine;
 
@@ -257,6 +259,7 @@ export class App {
 
   private showCombat(monster: Monster): void {
     if (!this.player) return;
+    this.root.classList.remove("creation-mode");
     const player = this.player;
     this.combat = new Combat(player, monster);
     this.combatBusy = false;
