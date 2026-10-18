@@ -29,6 +29,7 @@ function click(sel: string): boolean {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const text = () => document.getElementById("app")?.textContent ?? "";
+const profileText = () => root.querySelector(".journal-profile")?.textContent ?? "";
 
 const seed = (typeof process !== "undefined" && (process as unknown as { env?: Record<string, string> }).env?.["DOMTEST_SEED"])
   ? parseInt((process as unknown as { env: Record<string, string> }).env["DOMTEST_SEED"], 10)
@@ -46,6 +47,8 @@ check("12 class cards", classCards.length === 12);
 (speciesCards[4] as HTMLElement).click(); // Dragonborn
 (classCards[0] as HTMLElement).click(); // Fighter
 check("begin button exists", click("#begin-btn"));
+check("profile block pinned in journal", !!root.querySelector(".journal-profile"));
+check("profile shows Level 1 at start", profileText().includes("Level 1"));
 
 // ---- adventure screen ----
 check("walk button appears", !!root.querySelector("#walk-btn"));
@@ -262,6 +265,7 @@ for (let i = 0; i < 8 && !leveled; i++) {
 }
 check("hero leveled up to 2", leveled);
 check("adventure screen shows Level 2", text().includes("Level 2"));
+check("pinned profile updated to Level 2", profileText().includes("Level 2"));
 check("reached combat for ability test", await walkToCombat());
 check("level-2 ability button appears", !!root.querySelector(".ability-btn"));
 const abilityBtn = root.querySelector(".ability-btn") as HTMLButtonElement | null;

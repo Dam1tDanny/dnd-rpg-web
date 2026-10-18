@@ -423,6 +423,20 @@ h3 {
   word-break: break-word;
 }
 
+/* Pinned live hero-profile block at the top of the journal. It re-renders
+   on every logged line, so it never goes stale, and sticks to the top of
+   the scroll area while older entries scroll beneath it. */
+.journal-profile {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #171224;
+  border: 1px solid var(--gold-dim);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 6px;
+}
+
 /* ---------- combat flow ---------- */
 
 .combat-over {

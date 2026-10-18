@@ -138,7 +138,7 @@ export class App {
       this.player = new Character(this.heroName, this.pickedSpecies, this.pickedClass);
       this.engine = new AdventureEngine(this.player);
       this.journal.clear();
-      this.journal.addMany(this.player.summaryLines());
+      this.journal.setProfile(() => this.player!.summaryLines());
       this.journal.add("👟 Your adventure begins. Tap Walk to explore the wilds.");
       this.showAdventure();
     });
