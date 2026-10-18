@@ -51,10 +51,15 @@ export class App {
 
   // ---------------------------------------------------------------- creation
 
+  private setMode(mode: "creation" | "adventure" | "combat"): void {
+    this.root.classList.remove("creation-mode", "adventure-mode", "combat-mode");
+    this.root.classList.add(`${mode}-mode`);
+  }
+
   private showCreation(): void {
     this.combat = null;
     this.engine = null;
-    this.root.classList.add("creation-mode");
+    this.setMode("creation");
 
     const speciesCards = Object.entries(SPECIES_REGISTRY)
       .map(
@@ -161,7 +166,7 @@ export class App {
 
   private showAdventure(): void {
     if (!this.player || !this.engine) return;
-    this.root.classList.remove("creation-mode");
+    this.setMode("adventure");
     const player = this.player;
     const engine = this.engine;
 
@@ -184,8 +189,10 @@ export class App {
       <div class="card">
         <div class="bar-label"><span>🛒 Shop</span><strong>🧪 × <span id="shop-potion-count">${player.potions}</span></strong></div>
         <p class="hint" style="text-align:left;margin:4px 0 8px">${esc(POTION.name)} — restores 2d4+2 HP. Costs ${POTION.price}g.</p>
-        <button class="btn secondary" id="buy-potion-btn">🧪 Buy Potion (${POTION.price}g)</button>
-        <button class="btn secondary" id="drink-potion-btn">🥤 Drink Potion</button>
+        <div class="shop-row">
+          <button class="btn secondary" id="buy-potion-btn">🧪 Buy (${POTION.price}g)</button>
+          <button class="btn secondary" id="drink-potion-btn">🥤 Drink</button>
+        </div>
       </div>
 
       <div class="card">
@@ -259,7 +266,7 @@ export class App {
 
   private showCombat(monster: Monster): void {
     if (!this.player) return;
-    this.root.classList.remove("creation-mode");
+    this.setMode("combat");
     const player = this.player;
     this.combat = new Combat(player, monster);
     this.combatBusy = false;
@@ -275,22 +282,23 @@ export class App {
       .join("");
 
     this.root.innerHTML = `
-      <div class="card monster-card">
-        <div class="monster-name">👹 ${esc(monster.name)}</div>
-        <div class="monster-sub">Challenge Rating ${esc(monster.cr)}</div>
-        <div class="bar-label"><span>❤️ Enemy HP</span><strong id="mon-hp-text">${monster.hp}</strong></div>
-        <div class="hpbar monster"><div id="mon-hp-fill" style="width:100%"></div></div>
+      <div class="card combatants">
+        <div class="combatant">
+          <div class="monster-name">👹 ${esc(monster.name)}</div>
+          <div class="bar-label"><span>❤️ Enemy</span><strong id="mon-hp-text">${monster.hp}</strong></div>
+          <div class="hpbar monster"><div id="mon-hp-fill" style="width:100%"></div></div>
+        </div>
+        <div class="combatant">
+          <div class="hero-name">${esc(player.name)}</div>
+          <div class="bar-label"><span>❤️ You</span><strong id="pl-hp-text">${player.hp}/${player.maxHp}</strong></div>
+          <div class="hpbar"><div id="pl-hp-fill" style="width:${hpWidth(player.hp, player.maxHp)}"></div></div>
+        </div>
       </div>
 
       <div class="card">
         <div class="bar-label"><span>🗺️ Battle Map</span></div>
         <div id="grid-slot"></div>
         <p class="hint" id="range-hint" style="text-align:left;margin:6px 0 0"></p>
-      </div>
-
-      <div class="card">
-        <div class="bar-label"><span>❤️ ${esc(player.name)}</span><strong id="pl-hp-text">${player.hp}/${player.maxHp}</strong></div>
-        <div class="hpbar"><div id="pl-hp-fill" style="width:${hpWidth(player.hp, player.maxHp)}"></div></div>
       </div>
 
       <div id="journal-slot"></div>
@@ -302,8 +310,7 @@ export class App {
           <button class="btn secondary" id="potion-btn">🧪 Potion (${player.potions})</button>
           <button class="btn secondary" id="flee-btn">🏃 Flee</button>
         </div>
-        ${canBreath ? `<div class="btn-row"><button class="btn secondary" id="breath-btn">🐉 Breath</button></div>` : ""}
-        ${abilityButtons ? `<div class="btn-row" id="ability-row">${abilityButtons}</div>` : ""}
+        ${canBreath || abilityButtons ? `<div class="btn-row wrap">${canBreath ? `<button class="btn secondary" id="breath-btn">🐉 Breath</button>` : ""}${abilityButtons}</div>` : ""}
         <p class="hint">${canBreath ? "Breath Weapon: 2d6 elemental burst, once per fight. " : ""}Potions are swift — drink and still attack. Waiting holds your ground and lets the enemy come to you. Fleeing and abilities take your turn.</p>
       </div>
     `;

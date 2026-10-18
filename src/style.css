@@ -149,6 +149,81 @@ h3 {
   }
 }
 
+/* ---------- adventure & combat: same viewport-fit treatment ---------- */
+/* These screens also fill exactly one viewport and never need page
+   scrolling: the journal flexes and scrolls internally, action buttons stay
+   visible. (itch.io serves the game in an iframe; iframe pages don't scroll
+   reliably with touch on mobile.) */
+#app.adventure-mode,
+#app.combat-mode {
+  height: 100dvh;
+  gap: 8px;
+}
+#app.adventure-mode #journal-slot,
+#app.combat-mode #journal-slot {
+  flex: 1 1 0;
+  min-height: 48px;
+  display: flex;
+  flex-direction: column;
+}
+#app.adventure-mode #journal-slot .journal,
+#app.combat-mode #journal-slot .journal {
+  flex: 1 1 0;
+  min-height: 0;
+  height: auto;
+}
+/* Shop buttons share one row on the adventure screen. */
+#app.adventure-mode .shop-row {
+  display: flex;
+  gap: 8px;
+}
+#app.adventure-mode .shop-row .btn {
+  flex: 1;
+}
+/* Combat: compact cards, two-column HP header, capped battle map. */
+#app.combat-mode .card {
+  padding: 8px 10px;
+}
+#app.combat-mode .combatants {
+  display: flex;
+  gap: 12px;
+}
+#app.combat-mode .combatant {
+  flex: 1;
+  min-width: 0;
+}
+#app.combat-mode .combatant .monster-name,
+#app.combat-mode .combatant .hero-name {
+  font-size: 1rem;
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--text);
+  margin: 0;
+}
+#app.combat-mode .combatant .monster-name {
+  color: #e08a7d;
+}
+#app.combat-mode .battle-grid {
+  width: min(100%, 38dvh);
+  margin-left: auto;
+  margin-right: auto;
+}
+/* Breath + ability buttons wrap two-per-row instead of stacking rows. */
+#app.combat-mode #combat-controls .btn-row.wrap {
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+#app.combat-mode #combat-controls .btn-row.wrap .btn {
+  flex: 1 1 40%;
+  min-height: 44px;
+  font-size: 0.95rem;
+}
+@media (max-height: 560px) {
+  #app.combat-mode #combat-controls .hint,
+  #app.combat-mode #range-hint {
+    display: none;
+  }
+}
+
 @media (max-width: 380px) {
   .picker-grid {
     grid-template-columns: 1fr;
