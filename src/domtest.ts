@@ -29,7 +29,6 @@ function click(sel: string): boolean {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const text = () => document.getElementById("app")?.textContent ?? "";
-const profileText = () => root.querySelector(".journal-profile")?.textContent ?? "";
 
 const seed = (typeof process !== "undefined" && (process as unknown as { env?: Record<string, string> }).env?.["DOMTEST_SEED"])
   ? parseInt((process as unknown as { env: Record<string, string> }).env["DOMTEST_SEED"], 10)
@@ -47,14 +46,16 @@ check("12 class cards", classCards.length === 12);
 (speciesCards[4] as HTMLElement).click(); // Dragonborn
 (classCards[0] as HTMLElement).click(); // Fighter
 check("begin button exists", click("#begin-btn"));
-check("profile block pinned in journal", !!root.querySelector(".journal-profile"));
-check("profile shows Level 1 at start", profileText().includes("Level 1"));
+check("sheet button on adventure", !!root.querySelector("#sheet-btn"));
+check("sheet opens", click("#sheet-btn") && !!root.querySelector("#sheet-overlay"));
+check("sheet shows HERO PROFILE at Level 1", text().includes("HERO PROFILE") && text().includes("Level 1"));
+check("sheet back button closes it", click("#sheet-back-btn") && !root.querySelector("#sheet-overlay"));
 
 // ---- adventure screen ----
 check("walk button appears", !!root.querySelector("#walk-btn"));
 check("shop present", !!root.querySelector("#buy-potion-btn"));
 check("XP bar present", !!root.querySelector("#adv-xp-fill"));
-check("hero journal has profile", text().includes("HERO PROFILE"));
+check("journal log present", !!root.querySelector(".journal"));
 
 /** Tap Walk until a combat starts (attack button appears). */
 async function walkToCombat(): Promise<boolean> {
@@ -204,6 +205,9 @@ if (!root.querySelector("#retry-btn")) click("#continue-btn");
 
 // ---- battle grid: tap your token, tap a glowing square, token moves ----
 check("reached combat for grid test", await walkToCombat());
+check("sheet button in combat", !!root.querySelector("#sheet-btn"));
+check("sheet opens over combat", click("#sheet-btn") && !!root.querySelector("#sheet-overlay"));
+check("sheet back returns to combat intact", click("#sheet-back-btn") && !!root.querySelector("#attack-btn"));
 check("battle grid renders", !!root.querySelector(".battle-grid"));
 const pTok = root.querySelector(".gcell.player-token") as HTMLElement | null;
 const mTok = root.querySelector(".gcell.monster-token") as HTMLElement | null;
@@ -265,7 +269,9 @@ for (let i = 0; i < 8 && !leveled; i++) {
 }
 check("hero leveled up to 2", leveled);
 check("adventure screen shows Level 2", text().includes("Level 2"));
-check("pinned profile updated to Level 2", profileText().includes("Level 2"));
+check("sheet opens after level up", click("#sheet-btn") && !!root.querySelector("#sheet-overlay"));
+check("sheet shows Level 2", text().includes("Level 2"));
+check("sheet closes again", click("#sheet-back-btn") && !root.querySelector("#sheet-overlay"));
 check("reached combat for ability test", await walkToCombat());
 check("level-2 ability button appears", !!root.querySelector(".ability-btn"));
 const abilityBtn = root.querySelector(".ability-btn") as HTMLButtonElement | null;

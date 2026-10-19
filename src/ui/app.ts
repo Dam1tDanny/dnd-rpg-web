@@ -138,7 +138,6 @@ export class App {
       this.player = new Character(this.heroName, this.pickedSpecies, this.pickedClass);
       this.engine = new AdventureEngine(this.player);
       this.journal.clear();
-      this.journal.setProfile(() => this.player!.summaryLines());
       this.journal.add("👟 Your adventure begins. Tap Walk to explore the wilds.");
       this.showAdventure();
     });
@@ -172,7 +171,10 @@ export class App {
 
     this.root.innerHTML = `
       <div class="card hero-bar">
-        <div class="hero-name">${esc(player.name)}</div>
+        <div class="sheet-btn-row">
+          <div class="hero-name">${esc(player.name)}</div>
+          <button class="btn secondary btn-small" id="sheet-btn" aria-label="Open character sheet">🎒</button>
+        </div>
         <div class="hero-sub">${esc(player.speciesName)} · ${esc(player.className)} · <strong>Level ${player.level}</strong></div>
         <div class="bar-label"><span>❤️ HP</span><strong id="adv-hp-text">${player.hp}/${player.maxHp}</strong></div>
         <div class="hpbar"><div id="adv-hp-fill" style="width:${hpWidth(player.hp, player.maxHp)}"></div></div>
@@ -209,6 +211,7 @@ export class App {
     this.journal.element.classList.remove("combat-log");
     this.root.querySelector("#journal-slot")!.appendChild(this.journal.element);
     this.updateAdventureBars();
+    this.root.querySelector("#sheet-btn")!.addEventListener("click", () => this.openSheet());
 
     this.root.querySelector("#buy-potion-btn")!.addEventListener("click", () => {
       this.journal.addMany(player.buyPotion());
@@ -262,6 +265,31 @@ export class App {
     if (drinkBtn) drinkBtn.disabled = this.player.potions <= 0 || this.player.hp >= this.player.maxHp;
   }
 
+  /**
+   * Character sheet overlay. The old sticky journal-profile block used to
+   * live inside the log's scroll box, where on phones it covered the text
+   * scrolling beneath it. Now the 🎒 button opens this instead: a fixed
+   * full-viewport panel with the same info, built fresh from the player
+   * each time it opens. Back removes the overlay, so the adventure or
+   * combat screen underneath is exactly as it was — no state is rebuilt.
+   */
+  private openSheet(): void {
+    if (!this.player || this.root.querySelector("#sheet-overlay")) return;
+    const lines = this.player.summaryLines();
+    const [title, ...rest] = lines;
+    const overlay = document.createElement("div");
+    overlay.id = "sheet-overlay";
+    overlay.innerHTML = `
+      <div class="sheet-card">
+        <h2 class="sheet-title">${esc(title ?? "🗡️ HERO PROFILE")}</h2>
+        ${rest.map((l) => `<div class="journal-line">${esc(l)}</div>`).join("")}
+        <button class="btn" id="sheet-back-btn" style="margin-top:12px">← Back</button>
+      </div>
+    `;
+    this.root.appendChild(overlay);
+    overlay.querySelector("#sheet-back-btn")!.addEventListener("click", () => overlay.remove());
+  }
+
   // ------------------------------------------------------------------- combat
 
   private showCombat(monster: Monster): void {
@@ -296,7 +324,7 @@ export class App {
       </div>
 
       <div class="card">
-        <div class="bar-label"><span>🗺️ Battle Map</span></div>
+        <div class="bar-label"><span>🗺️ Battle Map</span><button class="btn secondary btn-small" id="sheet-btn" aria-label="Open character sheet">🎒 Hero</button></div>
         <div id="grid-slot"></div>
         <p class="hint" id="range-hint" style="text-align:left;margin:6px 0 0"></p>
       </div>
@@ -317,6 +345,7 @@ export class App {
 
     this.journal.element.classList.add("combat-log");
     this.root.querySelector("#journal-slot")!.appendChild(this.journal.element);
+    this.root.querySelector("#sheet-btn")!.addEventListener("click", () => this.openSheet());
 
     // The battle board: tap your token, then a glowing square, to reposition
     // (up to 3 squares, once per round). Moving never costs your attack.

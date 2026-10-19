@@ -423,18 +423,49 @@ h3 {
   word-break: break-word;
 }
 
-/* Pinned live hero-profile block at the top of the journal. It re-renders
-   on every logged line, so it never goes stale, and sticks to the top of
-   the scroll area while older entries scroll beneath it. */
-.journal-profile {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: #171224;
+/* ---------- character sheet overlay ---------- */
+/* The 🎒 button opens the full hero profile here instead of inside the
+   journal scroll box, where the old sticky block covered the log text on
+   phones. Fixed full-viewport panel; Back closes it without touching the
+   adventure/combat screen underneath. */
+#sheet-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(10, 7, 18, 0.96);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12px;
+  overflow-y: auto;
+}
+.sheet-card {
+  width: 100%;
+  max-width: 520px;
+  background: var(--card);
   border: 1px solid var(--gold-dim);
-  border-radius: 8px;
-  padding: 8px 10px;
-  margin-bottom: 6px;
+  border-radius: var(--radius);
+  padding: 14px;
+}
+.sheet-title {
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--gold);
+  margin: 0 0 8px;
+  font-size: 1.2rem;
+}
+.sheet-btn-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+/* Compact button for the 🎒 sheet opener: never full-width. */
+.btn-small {
+  width: auto;
+  min-height: 40px;
+  padding: 6px 12px;
+  font-size: 1rem;
+  flex: none;
 }
 
 /* ---------- combat flow ---------- */
